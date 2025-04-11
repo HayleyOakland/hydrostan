@@ -2,10 +2,14 @@
 #'
 #' Sample data using evenly spaced orders of magnitude.
 #'
-#' @param x vector of data values in x dimension
+#' @param x vector of data values in x dimension or a data.frame
+#' @param x_col,ycol name or number of data.frame column containing x dimension and y
+#'   dimension
 #' @param y vector of data values in y dimension (equal in length to x)
 #' @param n number of samples to extract
 #' @return a tibble of n {x,y} pairs
+#' @export
+#' @rdname dedensify
 #' @export
 dedensify <- function(x, y, n) {
   y = y[order(x)]
@@ -27,3 +31,10 @@ dedensify <- function(x, y, n) {
   approx(x, y, deden_x) |>
     dplyr::as_tibble()
 }
+
+#' @rdname dedensify
+#' @export
+dedensify_df <- function(x, x_col, y_col, n) {
+  dedensify(x[[x_col]], x[[y_col]], n = n)
+}
+

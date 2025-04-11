@@ -2,16 +2,22 @@
 % Please edit documentation in R/utils.R
 \name{dedensify}
 \alias{dedensify}
+\alias{dedensify_df}
 \title{Dedensify data using a log10 spacing}
 \usage{
 dedensify(x, y, n)
+
+dedensify_df(x, x_col, y_col, n)
 }
 \arguments{
-\item{x}{vector of data values in x dimension}
+\item{x}{vector of data values in x dimension or a data.frame}
 
 \item{y}{vector of data values in y dimension (equal in length to x)}
 
 \item{n}{number of samples to extract}
+
+\item{x_col, ycol}{name or number of data.frame column containing x dimension and y
+dimension}
 }
 \value{
 a tibble of n {x,y} pairs
