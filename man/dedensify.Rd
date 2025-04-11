@@ -5,9 +5,9 @@
 \alias{dedensify_df}
 \title{Dedensify data using a log10 spacing}
 \usage{
-dedensify(x, y, n)
+dedensify(x, y, n, x_offset = 1, decimals = 10)
 
-dedensify_df(x, x_col, y_col, n)
+dedensify_df(x, x_col, y_col, n, ...)
 }
 \arguments{
 \item{x}{vector of data values in x dimension or a data.frame}
@@ -16,8 +16,14 @@ dedensify_df(x, x_col, y_col, n)
 
 \item{n}{number of samples to extract}
 
-\item{x_col, ycol}{name or number of data.frame column containing x dimension and y
-dimension}
+\item{x_offset}{value added to x before log10 is applied; large values
+provide more evenly spaced points.  Small values crowd points toward the
+left (smaller values of x).}
+
+\item{x_col, ycol}{name or number of data.frame column containing x dimension
+and y dimension}
+
+\item{...}{other values passed on to dedensify.}
 }
 \value{
 a tibble of n {x,y} pairs
