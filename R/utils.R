@@ -1,3 +1,12 @@
+#' Dedensify data using a log10 spacing
+#'
+#' Sample data using evenly spaced orders of magnitude.
+#'
+#' @param x vector of data values in x dimension
+#' @param y vector of data values in y dimension (equal in length to x)
+#' @param n number of samples to extract
+#' @return a tibble of n {x,y} pairs
+#' @export
 dedensify <- function(x, y, n) {
   y = y[order(x)]
   x = sort(x)
