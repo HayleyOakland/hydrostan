@@ -1,19 +1,130 @@
+# Data Processing Functions ####
+
+#' Make list of data required for stan run
+#' 
+#' @param concData Data frame containing concentration by time data per trial (trialIdx x C x time). 
+#' @param Cvals Data frame containing starting and ending concentration values per trial.
+#' @param avgKprimeVals Data frame containing avgKprime values per trial.
+#' @param model The model to run in stan. Options include "wellMixedModel" for a basic exponential decay model (assuming a well-mixed hyporheic zone), "powerLawRTD" for the power law functional form of an RTD model of the hyporheic zone, or "exponentialRTD" for the exponential function form of the RTD model of the hyporheic zone
+#' @param include_drift Logical statement, whether to include drift as a parameter in the stan model. 
+#' @param include_qChange Logical statement, whether to include a change in q across trials (e.g., if there is more than one release per flume, are we testing the statistical model that q_down changed as a function of caddisfly density)
+#' @export
+makeStanDataList <- function(concData, 
+                             Cvals, avgKprimeVals, 
+                             resultsMatrix,
+                             model, 
+                             include_drift,
+                             include_qChange) {
+  # data required regardless of model
+  N = nrow(concData)
+  Trl = length(unique(concData$trialIdx))
+  trialIdx = concData$trialIdx
+  time = concData$time
+  conc = concData$C
+  C_pre = Cvals$C_pre          #C_pre = labFlumeData |> distinct(flumeDeploymentIdx,C_star) |> select(C_star) |> as_vector() |> unname()/
+  C_max_t = Cvals$C_max_t      #C_max_t = labFlumeData |> distinct(flumeDeploymentIdx,C_max_t) |> select(C_max_t) |> as_vector() |> unname(),
+  max_t = Cvals$max_t          #max_t = labFlumeData |> distinct(flumeDeploymentIdx,timeAtC_max_t) |> select(timeAtC_max_t) |> as_vector() |> unname(),
+  avgKprime = avgKprimeVals
+  
+  # if(include_qChange == T) {
+  #   calc_qChange = 1
+  #   Flm = length(unique(concData$flumeIdx))
+  #   flumeIdx = unique(concData$flumeIdx)
+  #   phase = unique(concData$phase)
+  #   flumeIdx = concData |> dplyr::distinct(trialIdx, flumeDeploymentIdx) |> dplyr::select(flumeDeploymentIdx) |> dplyr::as_vector() |> unname()
+  #   phase = concData |> dplyr::distinct(trialIdx, phase) |> dplyr::select(phase) |> dplyr::as_vector() |> unname()
+  #   density = concData |> dplyr::distinct(flumeDeploymentIdx, finalCaddisN) |> dplyr::mutate(finalCaddisDens_sqm = finalCaddisN / 0.13) |> dplyr::select(finalCaddisDens_sqm) |> dplyr::as_vector() |> unname() #convert final caddis N to final caddis density by dividing by surface area of flume stream bed (0.13m^2; to get n per m^2)
+  # }
+  # else {
+  #   calc_qChange = 0
+  #   Flm = 1
+  #   flumeIdx = rep(1, times=Trl)
+  #   phase = rep(1, times=Trl) #might need to be a number, not NA... 
+  #   density = 1e6
+  # }
+  
+  if(include_drift == T) {
+    calc_drift = 1
+  }
+  else {
+    calc_drift = 0
+  }
+  
+  #model-specific data
+  if(model == "powerLawRTD") {
+    use_hydrogeom_model = 1
+    tau_0 = 0.01
+    is_powerLaw = 1
+    N_pars = c(length(unique(as.numeric(dimnames(resultsMatrix)$alpha))), length(unique(as.numeric(dimnames(resultsMatrix)$V_h))), length(unique(as.numeric(dimnames(resultsMatrix)$time))))
+    curvParVals = unique(as.numeric(dimnames(resultsMatrix)$alpha))
+    V_ratios = unique(as.numeric(dimnames(resultsMatrix)$V_h))
+    times = unique(as.numeric(dimnames(resultsMatrix)$time))
+    m3d = resultsMatrix
+  } 
+  else if (model == "exponentialRTD") {
+    use_hydrogeom_model = 1
+    tau_0 = 0
+    is_powerLaw = 0
+    N_pars = c(length(unique(as.numeric(dimnames(resultsMatrix)$sigma))), length(unique(as.numeric(dimnames(resultsMatrix)$V_h))), length(unique(as.numeric(dimnames(resultsMatrix)$time))))
+    curvParVals = unique(as.numeric(dimnames(resultsMatrix)$sigma))
+    V_ratios = unique(as.numeric(dimnames(resultsMatrix)$V_h))
+    times = unique(as.numeric(dimnames(resultsMatrix)$time))
+    m3d = resultsMatrix
+  }
+  else if (model == "wellMixedModel") {
+    use_hydrogeom_model = 0
+    is_powerLaw = 0
+    N_pars = c(1,1,1)
+    curvParVals = 0
+    V_ratios = 0
+    times = 0
+    m3d = 0
+  }
+  stanDataList <- list(
+    N = N,
+    Trl = Trl,
+    # Flm = Flm,
+    trialIdx = trialIdx,
+    # flumeIdx = flumeIdx,
+    # phase = phase,
+    time = time, 
+    conc = conc,
+    C_pre = C_pre,
+    C_max_t = C_max_t,
+    max_t = max_t,
+    tau_0 = tau_0, 
+    # density = density,
+    avgKprime = avgKprime,
+    use_hydrogeom_model = use_hydrogeom_model,
+    is_powerLaw = is_powerLaw,
+    calc_drift = calc_drift,
+    # calc_qChange = calc_qChange,
+    N_pars = N_pars,
+    curvParVals = curvParVals,
+    V_ratios = V_ratios,
+    times = times,
+    m3d = m3d
+  )
+  return(stanDataList)
+}
+
+
 #' Make 3D matrix of channel concentration values.
 #' 
 #' @param result_tbl A tibble of concentration values relative to the three dimensions of the eventual matrix (created using hydrogeom and flumeTracer)
-#' @param target A character vector of length 1, default is "C_c" (channel concentration)
-#' @return 3D concentration matrix with dimensionless concentration values 
-#' (decaying from 1 to 0, e.g., scaled relative to initial concentration and 
-#' final concentration); and relative to dimensionless time values 
-#' (e.g., increasing from 0 to 1 as a fraction of maximum residence time, 
-#' time 0 is when "C_c" = 1.0, time 1.0 is when "C_c" = 0) 
+#' @param target A character vector of length 1, default is "C_c" (channel concentration) 
 #' 
 #' @description
 #' Make 3D concentration matrix relative to the maximum residence time (tau_n), 
 #' the ratio of volume between the hyporheic zone : total (V_ratio) 
 #' and the curvature parameter in the residence time distribution 
 #' (alpha for power law or sigma for exponential functional forms)
-#'  
+#' 
+#' @return 3D concentration matrix with dimensionless concentration values 
+#' (decaying from 1 to 0, e.g., scaled relative to initial concentration and 
+#' final concentration); and relative to dimensionless time values 
+#' (e.g., increasing from 0 to 1 as a fraction of maximum residence time, 
+#' time 0 is when "C_c" = 1.0, time 1.0 is when "C_c" = 0)
 #' @rdname make_matrix
 #' @export
 make_matrix <- function(results_tbl, target = "C_c") {
@@ -66,8 +177,8 @@ make_matrix <- function(results_tbl, target = "C_c") {
 #' @export
 #' @rdname dedensify
 #' @export
-dedensify <- function(x, y, n, x_offset = 1, decimals = 10) {
-  
+dedensify <- function(x, y, n, x_offset = 1, decimals = 10, approx=T) {
+
   #make sure x and y are ordered
   y = y[order(x)]
   x = sort(x)
@@ -82,8 +193,16 @@ dedensify <- function(x, y, n, x_offset = 1, decimals = 10) {
   #exponentiate back to original x scale
   deden_x = round(10^log_deden_x - x_offset, decimals)
   #find y-values associated with de-densified x values using approx, and return tibble
-  approx(x, y, deden_x) |>
-    dplyr::as_tibble()
+  if(approx==T){
+    approx(x, y, deden_x) |>
+    dplyr::as_tibble() %>% dplyr::rename(time=x, C=y)
+  }
+  else {
+    closest_indices <- sapply(deden_x, function(d) {which.min(abs(x-d))})
+    x = x[closest_indices]
+    y = y[closest_indices]
+    dplyr::bind_cols(time=x,C=y)
+  }
 }
 
 #' @rdname dedensify
@@ -93,3 +212,37 @@ dedensify_df <- function(x, x_col, y_col, n, ...) {
   dedensify(x[[x_col]], x[[y_col]], n, ...)
 }
 
+# Post-processing stanfit functions ####
+
+#' Extract posterior distributions for parameter estimates
+#' @param posterior is the posterior distributions from rstan::extract() of the stanFit object
+#' @param param is the desired parameter to extract (e.g., "tau_n", "predicted_concentration"). If param = "predicted_concentration", dataDF cannot be NA
+#' @param dataDF (only required if `param` = "predicted_concentration"; default=NA) is the original dataset dataframe fit by stan (e.g., nrow(dataDF) must be equal to the N in the list of data sent to the stan model), which must include columns `trialIdx` identifying the trials (with values from 1:trialN), `time` and `C` (concentration). The default is NA, as this is not required when param != "predicted_concentration"
+paramPostDists <- function(posterior, param, dataDF=NA){
+  postDistDF <- as.data.frame(posterior[[param]])
+  if(param == "predicted_concentration") {
+    postDistDF <- postDistDF |>
+      tidyr::pivot_longer(cols = dplyr::everything(), 
+                   names_to = "obs_idx", 
+                   values_to = "pred_conc") |>
+      dplyr::mutate(obs_idx = as.numeric(gsub("V", "", obs_idx))) |>
+      dplyr::left_join(data.frame(obs_idx = 1:nrow(dataDF), 
+                           trial = dataDF$trialIdx, 
+                           time = dataDF$time, 
+                           conc = dataDF$C), 
+                by = "obs_idx")
+  }
+  else{
+    trialN = ncol(postDistDF)
+    postDistDF <- postDistDF |>
+      `names<-`(paste0("trial", 1:trialN)) |>
+      dplyr::mutate(iter = 1:dplyr::n()) |>
+      tidyr::pivot_longer( 
+        cols = dplyr::contains("trial"),
+        names_to = "trial", 
+        names_prefix = "trial",
+        values_to = paste0(param, "_estimate")
+      ) 
+  }
+  return(postDistDF)
+}
