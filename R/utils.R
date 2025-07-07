@@ -10,7 +10,9 @@
 #' @param include_qChange Logical statement, whether to include a change in q across trials (e.g., if there is more than one release per flume, are we testing the statistical model that q_down changed as a function of caddisfly density)
 #' @export
 makeStanDataList <- function(concData, 
-                             Cvals, avgKprimeVals, 
+                             Cvals, 
+                             flumeInfo, 
+                             avgKprimeVals, 
                              resultsMatrix,
                              model, 
                              fracExTau,
@@ -30,12 +32,14 @@ makeStanDataList <- function(concData,
   
   if(include_qChange == T) {
     calc_qChange = 1
-    Flm = length(unique(concData$flumeIdx))
-    flumeIdx = unique(concData$flumeIdx)
-    phase = unique(concData$phase)
-    flumeIdx = concData |> dplyr::distinct(trialIdx, flumeDeploymentIdx) |> dplyr::select(flumeDeploymentIdx) |> dplyr::as_vector() |> unname()
-    phase = concData |> dplyr::distinct(trialIdx, phase) |> dplyr::select(phase) |> dplyr::as_vector() |> unname()
-    density = concData |> dplyr::distinct(flumeDeploymentIdx, finalCaddisN) |> dplyr::mutate(finalCaddisDens_sqm = finalCaddisN / 0.13) |> dplyr::select(finalCaddisDens_sqm) |> dplyr::as_vector() |> unname() #convert final caddis N to final caddis density by dividing by surface area of flume stream bed (0.13m^2; to get n per m^2)
+    Flm = length(unique(flumeInfo$flumeIdx))
+    flumeIdx = flumeInfo$flumeIdx
+    phase = flumeInfo$phase
+    density = flumeInfo |>
+      dplyr::distinct(flumeIdx, finalCaddisN) |>
+      dplyr::arrange(flumeIdx) |>
+      dplyr::mutate(finalCaddisDens_sqm = finalCaddisN / 0.13) |>
+      dplyr::pull(finalCaddisDens_sqm) #convert final caddis N to final caddis density by dividing by surface area of flume stream bed (0.13m^2; to get n per m^2)
   }
   else {
     calc_qChange = 0
@@ -95,7 +99,7 @@ makeStanDataList <- function(concData,
     C_max_t = C_max_t,
     max_t = max_t,
     fracExTau = fracExTau,
-    tau_0 = tau_0,
+    # tau_0 = tau_0,
     density = density,
     avgKprime = avgKprime,
     use_hydrogeom_model = use_hydrogeom_model,
