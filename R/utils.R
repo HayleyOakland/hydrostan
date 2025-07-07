@@ -273,7 +273,6 @@ paramPostDists <- function(posterior, param, dataDF=NA){
 #' @rdname fracExchanged
 #' @export
 fracExchanged <- function(shape, t, tau_0, tau_n, curvParVal) {
-  # browser()
   if(t > tau_n) return(1) #by definition, after tau_n, 100% of the hyporheic zone has exchanged with the channel
   if(shape=="exponent") {
   integrate(
