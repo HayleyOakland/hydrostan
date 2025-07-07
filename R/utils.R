@@ -53,7 +53,7 @@ makeStanDataList <- function(concData,
   #model-specific data
   if(model == "powerLawRTD") {
     use_hydrogeom_model = 1
-    tau_0 = 0.01
+    # tau_0 = 0.01
     is_powerLaw = 1
     N_pars = c(length(unique(as.numeric(dimnames(resultsMatrix)$alpha))), length(unique(as.numeric(dimnames(resultsMatrix)$V_h))), length(unique(as.numeric(dimnames(resultsMatrix)$time))))
     curvParVals = unique(as.numeric(dimnames(resultsMatrix)$alpha))
@@ -63,7 +63,7 @@ makeStanDataList <- function(concData,
   } 
   else if (model == "exponentialRTD") {
     use_hydrogeom_model = 1
-    tau_0 = 0
+    # tau_0 = 0
     is_powerLaw = 0
     N_pars = c(length(unique(as.numeric(dimnames(resultsMatrix)$sigma))), length(unique(as.numeric(dimnames(resultsMatrix)$V_h))), length(unique(as.numeric(dimnames(resultsMatrix)$time))))
     curvParVals = unique(as.numeric(dimnames(resultsMatrix)$sigma))
@@ -92,7 +92,7 @@ makeStanDataList <- function(concData,
     C_pre = C_pre,
     C_max_t = C_max_t,
     max_t = max_t,
-    tau_0 = tau_0, 
+    # tau_0 = tau_0, 
     # density = density,
     avgKprime = avgKprime,
     use_hydrogeom_model = use_hydrogeom_model,
@@ -172,6 +172,11 @@ make_matrix <- function(results_tbl, target = "C_c") {
 #'   left (smaller values of x).
 #' @param x_col,y_col name or number of data.frame column containing x dimension
 #'   and y dimension
+#' @param approx logical (default=T) argument. If TRUE, dedensify() uses approx() 
+#'    to find y values associated with de-densified x values;
+#'    If FALSE, dedensify finds indices of original data x values closest to the de-densified
+#'    x values, then uses those indices to filter y values (from the original data, 
+#'    e.g., instead of approximating y values)
 #' @param ... other values passed on to dedensify.
 #' @return a tibble of n {x,y} pairs
 #' @export
@@ -245,4 +250,50 @@ paramPostDists <- function(posterior, param, dataDF=NA){
       ) 
   }
   return(postDistDF)
+}
+
+#' Compute fraction of hyporheic zone that has exchanged by time t
+#' @param shape is a character vector of length 1, the shape of the residence time distribution (options: "exponent" or "powerLaw")
+#' @param t is a numeric vector of length 1, the time of interest (same units as tau_0 and tau_n) to compute the fraction of the hyporheic zone that has exchanged with the channel
+#' @param tau_0 is a numeric vector of length 1, the minimum residence time (can be 0 if shape="exponent", must be >0 if shape="powerLaw") (same time units as t and tau_n)
+#' @param tau_n is a numeric vector of length 1, the maximum residence time (same time units as t and tau_0)
+#' @param curvParVal is a numeric vector of length 1, the curvature parameter in the residence time distribution function (sigma if shape = "exponent", alpha if shape = "powerLaw")
+#' 
+#' @description
+#' The fraction of the hyporheic zone that has exchanged by a given time `t`
+#' can be computed as the integral from tau_0 to t of the washout function
+#' divided by the integral of the washout function.
+#' 
+#' @return 
+#' Numeric vector of length 1, the value of the fraction of the 
+#' hyporheic zone that has exchanged with the channel by given 
+#' time, t, relative to residence time distribution parameters 
+#' (tau_0, tau_n and the curvature parameter, sigma or alpha).
+#' 
+#' @rdname fracExchanged
+#' @export
+fracExchanged <- function(shape, t, tau_0, tau_n, curvParVal) {
+  # browser()
+  if(t > tau_n) return(1) #by definition, after tau_n, 100% of the hyporheic zone has exchanged with the channel
+  if(shape=="exponent") {
+  integrate(
+    function(tau) hydrogeom::exponentCCDF(tau, tau_0, 
+                                          tau_n, curvParVal) / 
+      hydrogeom::exponentIntCCDF(tau_0, tau_n,
+                                 tau_0, tau_n, 
+                                 sigma = curvParVal),
+    tau_0,
+    t)$value
+  }
+  if(shape=="powerLaw") {
+    integrate(
+      function(tau) hydrogeom::powerLawCCDF(tau, tau_0, 
+                                            tau_n, curvParVal) / 
+        hydrogeom::powerLawIntCCDF(tau_0, tau_n,
+                                   tau_0, tau_n, 
+                                   alpha = curvParVal),
+      tau_0,
+      t)$value
+  }
+  else {return("Options for shape are 'exponent' or 'powerLaw'")}
 }
