@@ -13,6 +13,7 @@ makeStanDataList <- function(concData,
                              Cvals, avgKprimeVals, 
                              resultsMatrix,
                              model, 
+                             fracExTau,
                              include_drift,
                              include_qChange) {
   # data required regardless of model
@@ -25,24 +26,25 @@ makeStanDataList <- function(concData,
   C_max_t = Cvals$C_max_t      #C_max_t = labFlumeData |> distinct(flumeDeploymentIdx,C_max_t) |> select(C_max_t) |> as_vector() |> unname(),
   max_t = Cvals$max_t          #max_t = labFlumeData |> distinct(flumeDeploymentIdx,timeAtC_max_t) |> select(timeAtC_max_t) |> as_vector() |> unname(),
   avgKprime = avgKprimeVals
+  fracExTau = fracExTau
   
-  # if(include_qChange == T) {
-  #   calc_qChange = 1
-  #   Flm = length(unique(concData$flumeIdx))
-  #   flumeIdx = unique(concData$flumeIdx)
-  #   phase = unique(concData$phase)
-  #   flumeIdx = concData |> dplyr::distinct(trialIdx, flumeDeploymentIdx) |> dplyr::select(flumeDeploymentIdx) |> dplyr::as_vector() |> unname()
-  #   phase = concData |> dplyr::distinct(trialIdx, phase) |> dplyr::select(phase) |> dplyr::as_vector() |> unname()
-  #   density = concData |> dplyr::distinct(flumeDeploymentIdx, finalCaddisN) |> dplyr::mutate(finalCaddisDens_sqm = finalCaddisN / 0.13) |> dplyr::select(finalCaddisDens_sqm) |> dplyr::as_vector() |> unname() #convert final caddis N to final caddis density by dividing by surface area of flume stream bed (0.13m^2; to get n per m^2)
-  # }
-  # else {
-  #   calc_qChange = 0
-  #   Flm = 1
-  #   flumeIdx = rep(1, times=Trl)
-  #   phase = rep(1, times=Trl) #might need to be a number, not NA... 
-  #   density = 1e6
-  # }
-  
+  if(include_qChange == T) {
+    calc_qChange = 1
+    Flm = length(unique(concData$flumeIdx))
+    flumeIdx = unique(concData$flumeIdx)
+    phase = unique(concData$phase)
+    flumeIdx = concData |> dplyr::distinct(trialIdx, flumeDeploymentIdx) |> dplyr::select(flumeDeploymentIdx) |> dplyr::as_vector() |> unname()
+    phase = concData |> dplyr::distinct(trialIdx, phase) |> dplyr::select(phase) |> dplyr::as_vector() |> unname()
+    density = concData |> dplyr::distinct(flumeDeploymentIdx, finalCaddisN) |> dplyr::mutate(finalCaddisDens_sqm = finalCaddisN / 0.13) |> dplyr::select(finalCaddisDens_sqm) |> dplyr::as_vector() |> unname() #convert final caddis N to final caddis density by dividing by surface area of flume stream bed (0.13m^2; to get n per m^2)
+  }
+  else {
+    calc_qChange = 0
+    Flm = 1
+    flumeIdx = rep(1, times=Trl)
+    phase = rep(1, times=Trl) #might need to be a number, not NA...
+    density = 1e6
+  }
+
   if(include_drift == T) {
     calc_drift = 1
   }
@@ -83,22 +85,23 @@ makeStanDataList <- function(concData,
   stanDataList <- list(
     N = N,
     Trl = Trl,
-    # Flm = Flm,
+    Flm = Flm,
     trialIdx = trialIdx,
-    # flumeIdx = flumeIdx,
-    # phase = phase,
+    flumeIdx = flumeIdx,
+    phase = phase,
     time = time, 
     conc = conc,
     C_pre = C_pre,
     C_max_t = C_max_t,
     max_t = max_t,
-    # tau_0 = tau_0, 
-    # density = density,
+    fracExTau = fracExTau,
+    tau_0 = tau_0,
+    density = density,
     avgKprime = avgKprime,
     use_hydrogeom_model = use_hydrogeom_model,
     is_powerLaw = is_powerLaw,
     calc_drift = calc_drift,
-    # calc_qChange = calc_qChange,
+    calc_qChange = calc_qChange,
     N_pars = N_pars,
     curvParVals = curvParVals,
     V_ratios = V_ratios,
