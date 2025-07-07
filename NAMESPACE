@@ -2,5 +2,6 @@
 
 export(dedensify)
 export(dedensify_df)
+export(fracExchanged)
 export(makeStanDataList)
 export(make_matrix)

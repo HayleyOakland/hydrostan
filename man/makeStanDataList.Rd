@@ -10,6 +10,7 @@ makeStanDataList(
   avgKprimeVals,
   resultsMatrix,
   model,
+  fracExTau,
   include_drift,
   include_qChange
 )
