@@ -4,8 +4,11 @@
 #' 
 #' @param concData Data frame containing concentration by time data per trial (trialIdx x C x time). 
 #' @param Cvals Data frame containing starting and ending concentration values per trial.
+#' @param flumeInfo Data frame containing information about the flumes used in the trials, including `flumeIdx`, `phase` (1=beginnning of experiment, 2=end of experiment), and `finalCaddisN` (the final abundance of caddisflies in each flume)
 #' @param avgKprimeVals Data frame containing avgKprime values per trial.
+#' @param fracExTau Vector of length 1 containing numeric value of time to find the fraction of the hyporheic zone that has exchanged by this given time (e.g., "30", if concentration DF times are in minutes, will find the fraction of the hyporheic zone exchanged by 30 minutes); equivalent to I(tau)
 #' @param model The model to run in stan. Options include "wellMixedModel" for a basic exponential decay model (assuming a well-mixed hyporheic zone), "powerLawRTD" for the power law functional form of an RTD model of the hyporheic zone, or "exponentialRTD" for the exponential function form of the RTD model of the hyporheic zone
+#' @param resultsMatrix Needed if model != wellMixedModel. Matrix of concentrations from the hydrogeom model for interpolation, relative to values of the curvature parameter (alpha for PLRTD or sigma for ExpRTD), volume ratio, and time
 #' @param include_drift Logical statement, whether to include drift as a parameter in the stan model. 
 #' @param include_qChange Logical statement, whether to include a change in q across trials (e.g., if there is more than one release per flume, are we testing the statistical model that q_down changed as a function of caddisfly density)
 #' @export
@@ -13,9 +16,9 @@ makeStanDataList <- function(concData,
                              Cvals, 
                              flumeInfo, 
                              avgKprimeVals, 
-                             resultsMatrix,
-                             model, 
                              fracExTau,
+                             model, 
+                             resultsMatrix,
                              include_drift,
                              include_qChange) {
   # data required regardless of model
@@ -45,8 +48,8 @@ makeStanDataList <- function(concData,
     calc_qChange = 0
     Flm = 1
     flumeIdx = rep(1, times=Trl)
-    phase = rep(1, times=Trl) #might need to be a number, not NA...
-    density = 1e6
+    phase = rep(1, times=Trl) 
+    density = array(1, dim=1) #make sure it's a vector, not scalar
   }
 
   if(include_drift == T) {
@@ -59,7 +62,6 @@ makeStanDataList <- function(concData,
   #model-specific data
   if(model == "powerLawRTD") {
     use_hydrogeom_model = 1
-    # tau_0 = 0.01
     is_powerLaw = 1
     N_pars = c(length(unique(as.numeric(dimnames(resultsMatrix)$alpha))), length(unique(as.numeric(dimnames(resultsMatrix)$V_h))), length(unique(as.numeric(dimnames(resultsMatrix)$time))))
     curvParVals = unique(as.numeric(dimnames(resultsMatrix)$alpha))
@@ -69,7 +71,6 @@ makeStanDataList <- function(concData,
   } 
   else if (model == "exponentialRTD") {
     use_hydrogeom_model = 1
-    # tau_0 = 0
     is_powerLaw = 0
     N_pars = c(length(unique(as.numeric(dimnames(resultsMatrix)$sigma))), length(unique(as.numeric(dimnames(resultsMatrix)$V_h))), length(unique(as.numeric(dimnames(resultsMatrix)$time))))
     curvParVals = unique(as.numeric(dimnames(resultsMatrix)$sigma))
@@ -99,7 +100,6 @@ makeStanDataList <- function(concData,
     C_max_t = C_max_t,
     max_t = max_t,
     fracExTau = fracExTau,
-    # tau_0 = tau_0,
     density = density,
     avgKprime = avgKprime,
     use_hydrogeom_model = use_hydrogeom_model,
