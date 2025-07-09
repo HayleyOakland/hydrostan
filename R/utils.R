@@ -24,7 +24,7 @@ makeStanDataList <- function(concData,
   # data required regardless of model
   N = nrow(concData)
   Trl = length(unique(concData$trialIdx))
-  if(names(concData) %in% "newTrialIdx") {
+  if(any(grepl("newTrialIdx", names(concData)))) {
     trialIdx = concData$newTrialIdx
   }
   else {trialIdx = concData$trialIdx}
