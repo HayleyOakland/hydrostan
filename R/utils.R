@@ -24,7 +24,10 @@ makeStanDataList <- function(concData,
   # data required regardless of model
   N = nrow(concData)
   Trl = length(unique(concData$trialIdx))
-  trialIdx = concData$trialIdx
+  if(names(concData) %in% newTrialIdx) {
+    trialIdx = concData$newTrialIdx
+  }
+  else {trialIdx = concData$trialIdx}
   time = concData$time
   conc = concData$C
   C_pre = Cvals$C_pre          #C_pre = labFlumeData |> distinct(flumeDeploymentIdx,C_star) |> select(C_star) |> as_vector() |> unname()/
