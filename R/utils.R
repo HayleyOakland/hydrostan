@@ -233,6 +233,7 @@ dedensify_df <- function(x, x_col, y_col, n, ...) {
 #' @param posterior is the posterior distributions from rstan::extract() of the stanFit object
 #' @param param is the desired parameter to extract (e.g., "tau_n", "predicted_concentration"). If param = "predicted_concentration", dataDF cannot be NA
 #' @param dataDF (only required if `param` = "predicted_concentration"; default=NA) is the original dataset dataframe fit by stan (e.g., nrow(dataDF) must be equal to the N in the list of data sent to the stan model), which must include columns `trialIdx` identifying the trials (with values from 1:trialN), `time` and `C` (concentration). The default is NA, as this is not required when param != "predicted_concentration"
+
 paramPostDists <- function(posterior, param, dataDF=NA){
   postDistDF <- as.data.frame(posterior[[param]])
   if(param == "predicted_concentration") {
