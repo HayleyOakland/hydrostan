@@ -1,5 +1,164 @@
 # Data Processing Functions ####
 
+#' Query data{} block requirements for a given stan file
+#' 
+#' @param stan_file_name Single item character vector that defines the file path + file name + .stan extension of the stan file to query data structure for
+#' @param file_path Default is NULL, which applies when the stan file is saved in the working directory. Otherwise, specify the single-item character vector defining the file path that contains the stan file
+#' @export
+get_stan_data_reqs <- function(stan_file_name, file_path=NULL) {
+  # Read the stan file
+  stan_code <- readLines(paste0(file_path, stan_file_name, ".stan"))
+  
+  # Find the data block
+  data_block_start <- which(grepl("^\\s*data\\s*\\{", stan_code))
+  data_block_end <- which(grepl("^\\s*\\}", stan_code))
+  data_block_end <- data_block_end[data_block_end > data_block_start][1]
+  
+  # Extract data block lines
+  data_lines <- stan_code[(data_block_start+1):(data_block_end-1)]
+  
+  # Remove comments
+  data_lines <- gsub("//.*$", "", data_lines)
+  data_lines <- trimws(data_lines)
+  data_lines <- data_lines[nzchar(data_lines)]
+  
+  # Parse variable declarations
+  result <- data.frame(variable = character(), type = character(), 
+                       lower = character(), upper = character(),
+                       dimensions = character(), stringsAsFactors = FALSE)
+  
+  for (line in data_lines) {
+    if (!grepl(";", line)) next # Skip if not a variable declaration
+    
+    # Split off the comment if any
+    var_decl <- trimws(gsub(";.*$", "", line))
+    
+    # Extract variable type and name with dimensions
+    pattern <- "^([^\\s]+)\\s+(.+)$"
+    full_type <- gsub(pattern, "\\1", var_decl)
+    var_with_dim <- trimws(gsub(pattern, "\\2", var_decl))
+    
+    # Extract constraints from the type
+    lower_bound <- NA_character_
+    upper_bound <- NA_character_
+    
+    if (grepl("<.*>", full_type)) {
+      constraints <- regmatches(full_type, regexpr("<.*>", full_type))
+      constraints <- gsub("<|>", "", constraints)
+      
+      # Parse lower bound
+      if (grepl("lower\\s*=", constraints)) {
+        lower_match <- regmatches(constraints, regexpr("lower\\s*=\\s*[^,>]+", constraints))
+        if (length(lower_match) > 0) {
+          lower_bound <- trimws(gsub("lower\\s*=\\s*", "", lower_match))
+        }
+      }
+      
+      # Parse upper bound
+      if (grepl("upper\\s*=", constraints)) {
+        upper_match <- regmatches(constraints, regexpr("upper\\s*=\\s*[^,>]+", constraints))
+        if (length(upper_match) > 0) {
+          upper_bound <- trimws(gsub("upper\\s*=\\s*", "", upper_match))
+        }
+      }
+    }
+    
+    # Clean up the type - remove constraints and extract base type
+    base_type <- gsub("<.*?>", "", full_type)
+    
+    # Check if dimensions are specified after the type (like vector[N])
+    type_has_dims <- grepl("\\[", full_type)
+    var_has_dims <- grepl("\\[", var_with_dim)
+    
+    if (type_has_dims) {
+      # Extract dimension from type (e.g., vector[N])
+      bracket_start <- regexpr("\\[", full_type)
+      bracket_end <- regexpr("\\]", full_type)
+      if (bracket_start > 0 && bracket_end > bracket_start) {
+        dim_desc <- substr(full_type, bracket_start + 1, bracket_end - 1)
+      } else {
+        dim_desc <- "1"
+      }
+      var_name <- var_with_dim
+      
+      # For types with dimensions, they're still scalar variables
+      type_desc <- paste(base_type, "scalar", sep = ", ")
+      
+    } else if (var_has_dims) {
+      # Extract dimension from variable name (e.g., real var[N])
+      var_name <- gsub("([^\\[]*)\\[.*", "\\1", var_with_dim)
+      
+      # Extract ALL dimensions, including nested brackets
+      # Find the first '[' and then find the matching ']' (accounting for nested brackets)
+      bracket_start <- regexpr("\\[", var_with_dim)
+      if (bracket_start > 0) {
+        # Extract everything after the first '['
+        after_bracket <- substr(var_with_dim, bracket_start + 1, nchar(var_with_dim))
+        
+        # Find the matching closing bracket by counting brackets
+        bracket_count <- 0
+        end_pos <- 0
+        for (i in 1:nchar(after_bracket)) {
+          char <- substr(after_bracket, i, i)
+          if (char == "[") {
+            bracket_count <- bracket_count + 1
+          } else if (char == "]") {
+            if (bracket_count == 0) {
+              end_pos <- i
+              break
+            } else {
+              bracket_count <- bracket_count - 1
+            }
+          }
+        }
+        
+        if (end_pos > 0) {
+          dim_desc <- substr(after_bracket, 1, end_pos - 1)
+        } else {
+          dim_desc <- "1"
+        }
+      } else {
+        dim_desc <- "1"
+      }
+      
+      # Determine array type
+      if (base_type %in% c("vector", "simplex", "ordered", "positive_ordered")) {
+        type_desc <- paste(base_type, "vector", sep = ", ")
+      } else {
+        type_desc <- paste(base_type, "array", sep = ", ")
+      }
+      
+    } else {
+      # No dimensions specified anywhere
+      var_name <- var_with_dim
+      
+      if (base_type %in% c("vector", "simplex", "ordered", "positive_ordered")) {
+        type_desc <- paste(base_type, "vector", sep = ", ")
+        dim_desc <- "1"
+      } else {
+        type_desc <- paste(base_type, "scalar", sep = ", ")
+        dim_desc <- "1"
+      }
+    }
+    
+    # Ensure all variables have values
+    if (is.null(var_name) || length(var_name) == 0 || var_name == "") {
+      next  # Skip this iteration if variable name is empty
+    }
+    
+    result <- rbind(result, data.frame(
+      variable = trimws(var_name),
+      type = type_desc,
+      lower = lower_bound,
+      upper = upper_bound,
+      dimensions = dim_desc,
+      stringsAsFactors = FALSE
+    ))
+  }
+  
+  return(result)
+}
+
 #' Make list of data required for stan run
 #' 
 #' @param concData Data frame containing concentration by time data per trial (trialIdx x C x time). 
