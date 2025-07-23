@@ -478,6 +478,36 @@ predConcSummary <- function(posterior, dataDF,
   return(list(predSummary = predSummary, iterRMSE = iterRMSE))
 }
 
+#' Summarize parameter estimates from stan fit.
+#' @description Returns a dataframe containing the mean, median sd and se of the parameter estimates per trial, summarized across iterations of the stan model fit for all parameters included in `params`.
+#' @param posterior Posterior distribution of stan fit, created using rstan::extract(stanFitObject)
+#' @param params Character vector of parameter names for those parameters estimates to be summarized. Options can be queried using `names(posterior)`. `params` can only contain the name(s) of one of the main parameters estimated per trial (e.g., not "sigma") or transformed parameters estimated per trial (e.g., not "predicted_concentration" or "lp__", see predConcSumm() to summarize predicted concentration).
+#' @param predType Single-item character vector with the type of prediction used in the stan fit (typically either "power law RTD" or "exponential RTD") 
+#' @export
+estimateSummary <- function(posterior,
+                            params, 
+                            predType) {
+  estSumm <- lapply(params, function(x) posterior[[x]] |> 
+                            dplyr::as_tibble() |>
+                            dplyr::mutate(iter=1:n()) |>
+                            tidyr::pivot_longer(cols=dplyr::contains("V"),
+                                                names_to = "trial",
+                                                names_prefix = "V",
+                                                values_to = "value") |>
+                            dplyr::mutate(estimate=paste(x))) |>
+    dplyr::bind_rows() |>
+    dplyr::group_by(trial, estimate) |>
+    dplyr::reframe(
+      mean = mean(value, na.rm=T),
+      median = median(value, na.rm=T),
+      sd = sd(value, na.rm=T),
+      se = sd/sqrt(n())
+    ) %>%
+    mutate(predType = predType)
+  
+  return(estSumm)
+}
+
 #' Compute fraction of hyporheic zone that has exchanged by time t
 #' @param shape is a character vector of length 1, the shape of the residence time distribution (options: "exponent" or "powerLaw")
 #' @param t is a numeric vector of length 1, the time of interest (same units as tau_0 and tau_n) to compute the fraction of the hyporheic zone that has exchanged with the channel

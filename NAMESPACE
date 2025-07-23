@@ -2,6 +2,7 @@
 
 export(dedensify)
 export(dedensify_df)
+export(estimateSummary)
 export(fracExchanged)
 export(get_stan_data_reqs)
 export(makeStanDataList)
