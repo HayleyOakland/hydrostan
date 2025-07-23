@@ -392,11 +392,12 @@ dedensify_df <- function(x, x_col, y_col, n, ...) {
 #' @param posterior is the posterior distributions from rstan::extract() of the stanFit object
 #' @param param is the desired parameter to extract (e.g., "tau_n", "predicted_concentration"). If param = "predicted_concentration", dataDF cannot be NA
 #' @param dataDF (only required if `param` = "predicted_concentration"; default=NA) is the original dataset dataframe fit by stan (e.g., nrow(dataDF) must be equal to the N in the list of data sent to the stan model), which must include columns `trialIdx` identifying the trials (with values from 1:trialN), `time` and `C` (concentration). The default is NA, as this is not required when param != "predicted_concentration"
-
+#' @export
 paramPostDists <- function(posterior, param, dataDF=NA){
   postDistDF <- as.data.frame(posterior[[param]])
   if(param == "predicted_concentration") {
     postDistDF <- postDistDF |>
+      dplyr::mutate(iter=1:n()) |>
       tidyr::pivot_longer(cols = dplyr::everything(), 
                    names_to = "obs_idx", 
                    values_to = "pred_conc") |>
@@ -420,6 +421,61 @@ paramPostDists <- function(posterior, param, dataDF=NA){
       ) 
   }
   return(postDistDF)
+}
+
+#' Summary of predicted concentration lines across iterations. 
+#' @description
+#' Returns list with two dataframes, `predSummary` and `iterRMSE`. `predSummary` contains a summary of the predicted concentrations across iterations, either based on median/quantile of iteration predictions or based on a random sample of predicted concentration iterations. 
+#' @param posterior Posterior distribution of stan fit (result of rstan::extract(stanFitObject)).
+#' @param dataDF Original dataset dataframe fit by stan (e.g., nrow(dataDF) must be equal to the N in the list of data sent to the stan model), which must include columns `trialIdx` identifying the trials (with values from 1:trialN), `time` and `C` (concentration)
+#' @param summary Desired summary type. Either "quantile" (based on quantiles of predicted concentration), or "sample" (random sample of iterations)
+#' @param summaryArgs If `summary`="quantile", a two-item vector of upper and lower quantile limits to summarize predicted concentration across iterations. If `summary`="sample", a single-item numeric vector defining the number of iterations to sample in the predicted concentration summary table.  
+#' @param predType Single item character vector defining the prediction type, typically either "exponential RTD" or "power law RTD"
+#' @export
+predConcSummary <- function(posterior, dataDF,
+                            summary,
+                            summaryArgs, 
+                            predType) {
+  
+  predConc <- paramPostDists(posterior = posterior, 
+                             param = "predictedConcentration",
+                             dataDF = dataDF)
+  
+  iterN <- nrow(posterior[["predicted_concentration"]])
+  obvN <- predConc |>
+    dplyr::group_by(trial) |>
+    dplyr::summarise(nObv = n_distinct(obs_idx)) |>
+    dplyr::ungroup() %>% 
+    dplyr::distinct(nObv) |> 
+    dplyr::pull()
+  
+  iterRMSE <- predConc |>
+    dplyr::group_by(trial) |>
+    dplyr::mutate(iter = rep(1:iterN, each = n_distinct(obs_idx))) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(sqErr = (pred_conc - conc)^2) |>
+    dplyr::group_by(trial, iter) |>
+    dplyr::summarise(rmse = sqrt(mean(sqErr))) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(predType = predType)
+  
+  if(summary == "quantile"){
+    predSummary <- predConc |>
+      dplyr::group_by(trial, time) %>%
+      dplyr::summarize(
+        pred_median = median(pred_conc),
+        pred_low = quantile(pred_conc, quantiles[1]),
+        pred_high = quantile(pred_conc, quantiles[2]),
+        observed_conc = first(conc)
+      ) %>%
+      dplyr::mutate(predType = predType)
+  }
+  if(summary == "sample") {
+    predSummary <- predConc %>%
+      filter(iter %in% sample(iterN, summaryArgs, replace=F))
+  }
+  else {return("Options for `summary` are 'quantile' or 'sample'.")}
+  return(list(predSummary, iterRMSE))
 }
 
 #' Compute fraction of hyporheic zone that has exchanged by time t
@@ -466,3 +522,5 @@ fracExchanged <- function(shape, t, tau_0, tau_n, curvParVal) {
   }
   else {return("Options for shape are 'exponent' or 'powerLaw'")}
 }
+
+
