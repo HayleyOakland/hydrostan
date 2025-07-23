@@ -398,10 +398,11 @@ paramPostDists <- function(posterior, param, dataDF=NA){
   if(param == "predicted_concentration") {
     postDistDF <- postDistDF |>
       dplyr::mutate(iter=1:n()) |>
-      tidyr::pivot_longer(cols = dplyr::everything(), 
+      tidyr::pivot_longer(cols = dplyr::contains("V"), 
                    names_to = "obs_idx", 
+                   names_prefix = "V",
                    values_to = "pred_conc") |>
-      dplyr::mutate(obs_idx = as.numeric(gsub("V", "", obs_idx))) |>
+      dplyr::mutate(obs_idx = as.numeric(obs_idx)) |>
       dplyr::left_join(data.frame(obs_idx = 1:nrow(dataDF), 
                            trial = dataDF$trialIdx, 
                            time = dataDF$time, 
@@ -429,7 +430,7 @@ paramPostDists <- function(posterior, param, dataDF=NA){
 #' @param posterior Posterior distribution of stan fit (result of rstan::extract(stanFitObject)).
 #' @param dataDF Original dataset dataframe fit by stan (e.g., nrow(dataDF) must be equal to the N in the list of data sent to the stan model), which must include columns `trialIdx` identifying the trials (with values from 1:trialN), `time` and `C` (concentration)
 #' @param summary Desired summary type. Either "quantile" (based on quantiles of predicted concentration), or "sample" (random sample of iterations)
-#' @param summaryArgs If `summary`="quantile", a two-item vector of upper and lower quantile limits to summarize predicted concentration across iterations. If `summary`="sample", a single-item numeric vector defining the number of iterations to sample in the predicted concentration summary table.  
+#' @param summaryArgs If `summary`="quantile", a two-item vector of upper and lower quantile limits to summarize predicted concentration across iterations (e.g., c(0.0275, 0.975)). If `summary`="sample", a single-item numeric vector defining the number of iterations to sample in the predicted concentration summary table.  
 #' @param predType Single item character vector defining the prediction type, typically either "exponential RTD" or "power law RTD"
 #' @export
 predConcSummary <- function(posterior, dataDF,
@@ -438,7 +439,7 @@ predConcSummary <- function(posterior, dataDF,
                             predType) {
   
   predConc <- paramPostDists(posterior = posterior, 
-                             param = "predictedConcentration",
+                             param = "predicted_concentration",
                              dataDF = dataDF)
   
   iterN <- nrow(posterior[["predicted_concentration"]])
@@ -464,8 +465,8 @@ predConcSummary <- function(posterior, dataDF,
       dplyr::group_by(trial, time) %>%
       dplyr::summarize(
         pred_median = median(pred_conc),
-        pred_low = quantile(pred_conc, quantiles[1]),
-        pred_high = quantile(pred_conc, quantiles[2]),
+        pred_low = quantile(pred_conc, summaryArgs[1]),
+        pred_high = quantile(pred_conc, summaryArgs[2]),
         observed_conc = first(conc)
       ) %>%
       dplyr::mutate(predType = predType)
@@ -474,8 +475,7 @@ predConcSummary <- function(posterior, dataDF,
     predSummary <- predConc %>%
       filter(iter %in% sample(iterN, summaryArgs, replace=F))
   }
-  else {return("Options for `summary` are 'quantile' or 'sample'.")}
-  return(list(predSummary, iterRMSE))
+  return(list(predSummary = predSummary, iterRMSE = iterRMSE))
 }
 
 #' Compute fraction of hyporheic zone that has exchanged by time t
